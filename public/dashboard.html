@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Rate Limiter — Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:      #060910;
+      --surface: #0c1118;
+      --surface2:#111820;
+      --border:  #182030;
+      --border2: #1e2a3a;
+      --accent:  #00d4ff;
+      --green:   #00ff88;
+      --red:     #ff3b5c;
+      --yellow:  #ffb800;
+      --purple:  #b060ff;
+      --text:    #e2eaf4;
+      --muted:   #3d5570;
+      --muted2:  #5a7498;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Space Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none; z-index: 0;
+    }
+
+    body::after {
+      content: '';
+      position: fixed; top: -300px; right: -200px;
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, rgba(0,212,255,0.05) 0%, transparent 65%);
+      pointer-events: none; z-index: 0;
+    }
+
+    .orb2 {
+      position: fixed; bottom: -200px; left: -100px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(176,96,255,0.04) 0%, transparent 65%);
+      pointer-events: none; z-index: 0;
+    }
+
+    .wrapper { position: relative; z-index: 1; max-width: 1160px; margin: 0 auto; padding: 32px 28px 60px; }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 32px; flex-wrap: wrap; gap: 16px;
+      padding-bottom: 24px; border-bottom: 1px solid var(--border);
+    }
+    .logo { display: flex; align-items: center; gap: 16px; }
+    .logo-icon {
+      width: 46px; height: 46px;
+      background: linear-gradient(135deg, rgba(0,212,255,0.08), rgba(0,212,255,0.18));
+      border: 1px solid rgba(0,212,255,0.3); border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; box-shadow: 0 0 20px rgba(0,212,255,0.15);
+    }
+    .logo-text h1 {
+      font-family: 'Syne', sans-serif; font-weight: 800;
+      font-size: 1.35rem; color: var(--text); letter-spacing: -0.5px;
+    }
+    .logo-sub { display: flex; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+    .logo-tag {
+      font-size: 0.6rem; letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 2px 7px; border-radius: 4px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border2); color: var(--muted2);
+    }
+
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .uptime-pill {
+      font-size: 0.68rem; color: var(--muted2); letter-spacing: 1px;
+      padding: 6px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    }
+    .uptime-pill span { color: var(--accent); }
+    .ws-pill {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 7px 14px;
+      font-size: 0.68rem; color: var(--muted2); letter-spacing: 1.5px;
+    }
+    .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--red); transition: background 0.4s; flex-shrink:0; }
+    .pulse.on { background: var(--green); box-shadow: 0 0 6px var(--green); animation: blink 2s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+    /* ── Stat Cards ── */
+    .cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 14px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px 18px 18px;
+      position: relative; overflow: hidden; transition: transform 0.2s, border-color 0.2s; cursor: default;
+    }
+    .card:hover { transform: translateY(-3px); border-color: var(--border2); }
+    .card::after {
+      content: ''; position: absolute; top: 16px; bottom: 16px; left: 0; width: 3px; border-radius: 0 2px 2px 0;
+    }
+    .card.c-green::after  { background: var(--green);  box-shadow: 0 0 12px rgba(0,255,136,0.5); }
+    .card.c-red::after    { background: var(--red);    box-shadow: 0 0 12px rgba(255,59,92,0.5); }
+    .card.c-yellow::after { background: var(--yellow); box-shadow: 0 0 12px rgba(255,184,0,0.5); }
+    .card.c-purple::after { background: var(--purple); box-shadow: 0 0 12px rgba(176,96,255,0.5); }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 60px; opacity: 0.06; pointer-events: none;
+    }
+    .card.c-green::before  { background: radial-gradient(ellipse at 50% 0%, var(--green),  transparent); }
+    .card.c-red::before    { background: radial-gradient(ellipse at 50% 0%, var(--red),    transparent); }
+    .card.c-yellow::before { background: radial-gradient(ellipse at 50% 0%, var(--yellow), transparent); }
+    .card.c-purple::before { background: radial-gradient(ellipse at 50% 0%, var(--purple), transparent); }
+
+    .card-inner { padding-left: 10px; }
+    .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .card-icon { font-size: 1.1rem; }
+    .card-badge {
+      font-size: 0.58rem; letter-spacing: 2px; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 4px; font-family: 'Space Mono';
+    }
+    .c-green  .card-badge { background: rgba(0,255,136,0.08);  color: var(--green);  border: 1px solid rgba(0,255,136,0.18); }
+    .c-red    .card-badge { background: rgba(255,59,92,0.08);   color: var(--red);    border: 1px solid rgba(255,59,92,0.18); }
+    .c-yellow .card-badge { background: rgba(255,184,0,0.08);   color: var(--yellow); border: 1px solid rgba(255,184,0,0.18); }
+    .c-purple .card-badge { background: rgba(176,96,255,0.08);  color: var(--purple); border: 1px solid rgba(176,96,255,0.18); }
+    .card-num {
+      font-family: 'Syne', sans-serif; font-weight: 800;
+      font-size: 2.8rem; line-height: 1; margin-bottom: 5px; transition: transform 0.15s;
+    }
+    .card-num.bump { transform: scale(1.08); }
+    .c-green  .card-num { color: var(--green); }
+    .c-red    .card-num { color: var(--red); }
+    .c-yellow .card-num { color: var(--yellow); }
+    .c-purple .card-num { color: var(--purple); }
+    .card-label { font-size: 0.65rem; color: var(--muted2); letter-spacing: 2px; text-transform: uppercase; }
+    .card-spark { position: absolute; bottom: 0; right: 0; width: 80px; height: 36px; opacity: 0.35; }
+
+    /* ── Traffic bar ── */
+    .traffic-bar {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px 20px; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 20px;
+    }
+    .traffic-label { font-size: 0.62rem; color: var(--muted2); letter-spacing: 2px; text-transform: uppercase; white-space: nowrap; }
+    .traffic-segments { flex: 1; display: flex; height: 8px; border-radius: 5px; overflow: hidden; gap: 2px; }
+    .traffic-seg { height: 100%; border-radius: 3px; transition: width 0.6s ease; min-width: 0; }
+    .seg-ok  { background: var(--green); }
+    .seg-lim { background: var(--red); }
+    .seg-bot { background: var(--yellow); }
+    .seg-waf { background: var(--purple); }
+    .traffic-legend { display: flex; gap: 14px; }
+    .leg-item { display: flex; align-items: center; gap: 5px; font-size: 0.62rem; color: var(--muted2); }
+    .leg-dot  { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Mid row ── */
+    .mid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+    .panel-title {
+      font-family: 'Syne', sans-serif; font-size: 0.7rem; font-weight: 600;
+      letter-spacing: 3px; text-transform: uppercase; color: var(--muted2);
+      margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
+    }
+    .panel-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* Bucket */
+    .bucket-area { display: flex; align-items: center; gap: 24px; }
+    .bucket-top {
+      width: 76px; height: 10px;
+      border-left: 2px solid var(--accent); border-right: 2px solid var(--accent);
+      opacity: 0.25; border-radius: 2px 2px 0 0;
+    }
+    .bucket-body {
+      width: 76px; height: 126px;
+      border: 2px solid rgba(0,212,255,0.4); border-top: none;
+      border-radius: 0 0 14px 14px; position: relative; overflow: hidden;
+      background: rgba(0,212,255,0.02);
+    }
+    .bucket-fill {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, rgba(0,212,255,0.75), rgba(0,212,255,0.2));
+      transition: height 0.5s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .bucket-fill::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: rgba(255,255,255,0.35); border-radius: 2px; animation: wave 2.5s ease-in-out infinite;
+    }
+    @keyframes wave { 0%,100%{opacity:0.3} 50%{opacity:0.9} }
+    .token-num {
+      position: absolute; width: 100%; text-align: center; bottom: 8px;
+      font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.4rem;
+      color: white; z-index: 2; text-shadow: 0 0 10px rgba(0,0,0,0.9);
+    }
+    .bucket-stats { flex: 1; }
+    .stat-row {
+      display: flex; justify-content: space-between;
+      padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 0.75rem;
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-key { color: var(--muted2); }
+    .stat-val { color: var(--accent); font-weight: bold; }
+    .progress-bar-wrap { margin-top: 14px; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 0.66rem; color: var(--muted2); margin-bottom: 6px; }
+    .progress-bar { height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #0055dd); border-radius: 99px; transition: width 0.5s ease; }
+
+    /* Buttons */
+    .test-btns { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+    .btn {
+      width: 100%; padding: 10px 14px; border-radius: 9px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text); font-family: 'Space Mono', monospace; font-size: 0.75rem;
+      cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+      transition: all 0.18s; letter-spacing: 0.4px;
+    }
+    .btn:hover  { background: rgba(255,255,255,0.03); border-color: var(--border2); color: var(--accent); }
+    .btn:active { transform: scale(0.98); }
+    .btn .btn-badge {
+      font-size: 0.6rem; padding: 2px 7px; border-radius: 4px;
+      background: rgba(255,255,255,0.05); border: 1px solid var(--border2); color: var(--muted2);
+    }
+    .btn-flood { border-color: rgba(255,59,92,0.2); color: rgba(255,59,92,0.8); }
+    .btn-flood:hover { background: rgba(255,59,92,0.06); border-color: rgba(255,59,92,0.5); color: var(--red); }
+    #result {
+      padding: 9px 13px; background: rgba(0,0,0,0.25);
+      border: 1px solid var(--border); border-radius: 9px;
+      font-size: 0.72rem; color: var(--muted2); min-height: 36px;
+      display: flex; align-items: center; transition: color 0.3s;
+    }
+
+    /* ── WAF + Bot row ── */
+    .waf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+
+    .waf-breakdown { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+    .rule-list { display: flex; flex-direction: column; gap: 8px; }
+    .rule-item { display: flex; align-items: center; gap: 10px; font-size: 0.7rem; }
+    .rule-name { color: var(--muted2); flex: 1; }
+    .rule-bar-wrap { width: 80px; height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .rule-bar { height: 100%; background: var(--purple); border-radius: 99px; width: 0; transition: width 0.5s ease; }
+    .rule-count { color: var(--purple); min-width: 24px; text-align: right; font-size: 0.68rem; font-weight: bold; }
+
+    .bot-info { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+    .score-display { display: flex; align-items: center; gap: 18px; margin-bottom: 16px; }
+    .score-ring { position: relative; width: 72px; height: 72px; flex-shrink: 0; }
+    .score-ring svg { transform: rotate(-90deg); }
+    .ring-bg   { fill: none; stroke: var(--border); stroke-width: 6; }
+    .ring-fill { fill: none; stroke: var(--yellow); stroke-width: 6; stroke-linecap: round;
+                 stroke-dasharray: 188; stroke-dashoffset: 188; transition: stroke-dashoffset 0.6s ease; }
+    .ring-label {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .ring-num { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.1rem; color: var(--yellow); line-height: 1; }
+    .ring-sub { font-size: 0.52rem; color: var(--muted2); letter-spacing: 1px; margin-top: 2px; }
+    .score-checks { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .score-check { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; }
+    .check-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .check-dot.pass { background: var(--green); }
+    .check-dot.warn { background: var(--yellow); }
+    .check-label { color: var(--muted2); }
+    .check-val   { margin-left: auto; font-size: 0.68rem; }
+    .threat-level {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 8px; font-size: 0.68rem;
+    }
+    .threat-label { color: var(--muted2); letter-spacing: 1px; text-transform: uppercase; }
+    .threat-val { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.85rem; }
+    .threat-low    { color: var(--green); }
+    .threat-medium { color: var(--yellow); }
+    .threat-high   { color: var(--red); }
+
+    /* ── Log ── */
+    .log-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+    .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .log-header-left { display: flex; align-items: center; gap: 10px; }
+    .log-live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 2s infinite; }
+    .log-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .log-filter {
+      font-size: 0.6rem; color: var(--muted2); cursor: pointer;
+      background: none; border: 1px solid var(--border); border-radius: 5px;
+      padding: 3px 9px; font-family: 'Space Mono'; transition: all 0.15s;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .log-filter.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.06); }
+    .log-filter:hover  { border-color: var(--border2); color: var(--text); }
+    .log-clear {
+      font-size: 0.6rem; color: var(--muted2); cursor: pointer;
+      background: none; border: 1px solid var(--border); border-radius: 5px;
+      padding: 3px 9px; font-family: 'Space Mono'; transition: all 0.15s;
+    }
+    .log-clear:hover { border-color: var(--red); color: var(--red); }
+    .log-cols {
+      display: grid; grid-template-columns: 76px 1fr 100px 110px 72px;
+      gap: 10px; padding: 0 0 8px; border-bottom: 1px solid var(--border);
+      font-size: 0.58rem; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase;
+    }
+    #log { height: 240px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+    #log::-webkit-scrollbar { width: 3px; }
+    #log::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+    .entry {
+      display: grid; grid-template-columns: 76px 1fr 100px 110px 72px;
+      gap: 10px; align-items: center;
+      padding: 7px 0; border-bottom: 1px solid rgba(24,32,48,0.7);
+      font-size: 0.7rem; animation: fadeIn 0.18s ease;
+    }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(-3px)} to{opacity:1;transform:translateY(0)} }
+    .entry-badge {
+      padding: 2px 7px; border-radius: 4px;
+      font-size: 0.58rem; font-weight: bold; letter-spacing: 1px; text-align: center; white-space: nowrap;
+    }
+    .badge-ok  { background: rgba(0,255,136,0.08);  color: var(--green);  border: 1px solid rgba(0,255,136,0.18); }
+    .badge-lim { background: rgba(255,59,92,0.08);   color: var(--red);    border: 1px solid rgba(255,59,92,0.18); }
+    .badge-bot { background: rgba(255,184,0,0.08);   color: var(--yellow); border: 1px solid rgba(255,184,0,0.18); }
+    .badge-waf { background: rgba(176,96,255,0.08);  color: var(--purple); border: 1px solid rgba(176,96,255,0.18); }
+    .entry-path   { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .entry-ip     { color: var(--muted2); font-size: 0.66rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .entry-detail { color: var(--muted2); font-size: 0.64rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .entry-time   { color: var(--muted); text-align: right; font-size: 0.64rem; }
+    .empty-log    { color: var(--muted); font-size: 0.72rem; text-align: center; padding: 50px 0; }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.62rem; color: var(--muted); flex-wrap: wrap; gap: 8px;
+    }
+    .footer-stats { display: flex; gap: 20px; }
+    .footer-stat  { color: var(--muted2); }
+    .footer-stat b { color: var(--accent); }
+
+    @media (max-width: 800px) {
+      .cards { grid-template-columns: repeat(2,1fr); }
+      .mid-row, .waf-row { grid-template-columns: 1fr; }
+      .log-cols { grid-template-columns: 72px 1fr 72px; }
+      .entry    { grid-template-columns: 72px 1fr 72px; }
+      .log-cols > :nth-child(3),
+      .log-cols > :nth-child(4),
+      .entry > :nth-child(3),
+      .entry > :nth-child(4) { display: none; }
+      .traffic-legend { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="orb2"></div>
+<div class="wrapper">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🛡️</div>
+      <div class="logo-text">
+        <h1>Rate Limiter</h1>
+        <div class="logo-sub">
+          <span class="logo-tag">Token Bucket</span>
+          <span class="logo-tag">Bot Detection</span>
+          <span class="logo-tag">WAF</span>
+          <span class="logo-tag">Live</span>
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="uptime-pill">Session: <span id="uptimeVal">00:00</span></div>
+      <div class="ws-pill">
+        <div class="pulse" id="dot"></div>
+        <span id="wsLabel">CONNECTING</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Stat Cards -->
+  <div class="cards">
+    <div class="card c-green">
+      <div class="card-inner">
+        <div class="card-top"><span class="card-icon">✅</span><span class="card-badge">Allowed</span></div>
+        <div class="card-num" id="cntOk">0</div>
+        <div class="card-label">Requests passed</div>
+      </div>
+      <canvas class="card-spark" id="sparkOk" width="80" height="36"></canvas>
+    </div>
+    <div class="card c-red">
+      <div class="card-inner">
+        <div class="card-top"><span class="card-icon">🚫</span><span class="card-badge">Blocked</span></div>
+        <div class="card-num" id="cntLim">0</div>
+        <div class="card-label">Rate limited</div>
+      </div>
+      <canvas class="card-spark" id="sparkLim" width="80" height="36"></canvas>
+    </div>
+    <div class="card c-yellow">
+      <div class="card-inner">
+        <div class="card-top"><span class="card-icon">🤖</span><span class="card-badge">Bots</span></div>
+        <div class="card-num" id="cntBot">0</div>
+        <div class="card-label">Bot requests</div>
+      </div>
+      <canvas class="card-spark" id="sparkBot" width="80" height="36"></canvas>
+    </div>
+    <div class="card c-purple">
+      <div class="card-inner">
+        <div class="card-top"><span class="card-icon">🛡️</span><span class="card-badge">WAF</span></div>
+        <div class="card-num" id="cntWaf">0</div>
+        <div class="card-label">WAF blocks</div>
+      </div>
+      <canvas class="card-spark" id="sparkWaf" width="80" height="36"></canvas>
+    </div>
+  </div>
+
+  <!-- Traffic Distribution Bar -->
+  <div class="traffic-bar">
+    <span class="traffic-label">Traffic split</span>
+    <div class="traffic-segments">
+      <div class="traffic-seg seg-ok"  id="segOk"  style="width:25%"></div>
+      <div class="traffic-seg seg-lim" id="segLim" style="width:25%"></div>
+      <div class="traffic-seg seg-bot" id="segBot" style="width:25%"></div>
+      <div class="traffic-seg seg-waf" id="segWaf" style="width:25%"></div>
+    </div>
+    <div class="traffic-legend">
+      <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Allowed</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--red)"></div>Limited</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--yellow)"></div>Bot</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--purple)"></div>WAF</div>
+    </div>
+  </div>
+
+  <!-- Bucket + Test -->
+  <div class="mid-row">
+    <div class="panel">
+      <div class="panel-title">Token Bucket Status</div>
+      <div class="bucket-area">
+        <div>
+          <div class="bucket-top"></div>
+          <div class="bucket-body">
+            <div class="bucket-fill" id="fill" style="height:100%"></div>
+            <div class="token-num" id="tokenNum">10</div>
+          </div>
+        </div>
+        <div class="bucket-stats">
+          <div class="stat-row"><span class="stat-key">Capacity</span><span class="stat-val">10 tokens</span></div>
+          <div class="stat-row"><span class="stat-key">Refill rate</span><span class="stat-val">0.2 / sec</span></div>
+          <div class="stat-row"><span class="stat-key">Algorithm</span><span class="stat-val">Token Bucket</span></div>
+          <div class="stat-row"><span class="stat-key">Available</span><span class="stat-val" id="tokenAvail">10</span></div>
+          <div class="progress-bar-wrap">
+            <div class="progress-label"><span>Fill level</span><span id="pctLabel">100%</span></div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:100%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Test the Limiter</div>
+      <div class="test-btns">
+        <button class="btn" onclick="sendRequests(1)">
+          <span>Send 1 Request</span><span class="btn-badge">single</span>
+        </button>
+        <button class="btn" onclick="sendRequests(5)">
+          <span>Burst × 5</span><span class="btn-badge">burst</span>
+        </button>
+        <button class="btn btn-flood" onclick="sendRequests(15)">
+          <span>Flood × 15</span><span class="btn-badge">🚨 flood</span>
+        </button>
+      </div>
+      <div id="result">← Click a button to test</div>
+    </div>
+  </div>
+
+  <!-- WAF rule breakdown + Bot panel -->
+  <div class="waf-row">
+    <div class="waf-breakdown">
+      <div class="panel-title">WAF Rule Hits</div>
+      <div class="rule-list" id="ruleList">
+        <div class="rule-item">
+          <span class="rule-name" style="color:var(--muted);font-size:0.68rem">No WAF blocks yet</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bot-info">
+      <div class="panel-title">Bot Threat Level</div>
+      <div class="score-display">
+        <div class="score-ring">
+          <svg width="72" height="72" viewBox="0 0 72 72">
+            <circle class="ring-bg"   cx="36" cy="36" r="30"/>
+            <circle class="ring-fill" cx="36" cy="36" r="30" id="ringFill"/>
+          </svg>
+          <div class="ring-label">
+            <span class="ring-num" id="ringNum">0</span>
+            <span class="ring-sub">SCORE</span>
+          </div>
+        </div>
+        <div class="score-checks">
+          <div class="score-check">
+            <div class="check-dot pass" id="dotUA"></div>
+            <span class="check-label">User-Agent present</span>
+            <span class="check-val" id="valUA" style="color:var(--muted2)">—</span>
+          </div>
+          <div class="score-check">
+            <div class="check-dot pass" id="dotTool"></div>
+            <span class="check-label">No bot tool detected</span>
+            <span class="check-val" id="valTool" style="color:var(--muted2)">—</span>
+          </div>
+          <div class="score-check">
+            <div class="check-dot pass" id="dotSpeed"></div>
+            <span class="check-label">Request speed OK</span>
+            <span class="check-val" id="valSpeed" style="color:var(--muted2)">—</span>
+          </div>
+        </div>
+      </div>
+      <div class="threat-level">
+        <span class="threat-label">Threat level</span>
+        <span class="threat-val threat-low" id="threatVal">LOW</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Log -->
+  <div class="log-panel">
+    <div class="log-header">
+      <div class="log-header-left">
+        <div class="panel-title" style="margin-bottom:0">Live Request Log</div>
+        <div class="log-live-dot"></div>
+      </div>
+      <div class="log-controls">
+        <button class="log-filter active" id="fALL"     onclick="setFilter('ALL')">All</button>
+        <button class="log-filter"        id="fOK"      onclick="setFilter('OK')">OK</button>
+        <button class="log-filter"        id="fLIMITED" onclick="setFilter('LIMITED')">Limited</button>
+        <button class="log-filter"        id="fBOT"     onclick="setFilter('BOT')">Bot</button>
+        <button class="log-filter"        id="fWAF"     onclick="setFilter('WAF')">WAF</button>
+        <button class="log-clear"         onclick="clearLog()">Clear</button>
+      </div>
+    </div>
+    <div class="log-cols">
+      <span>Status</span><span>Path</span><span>IP</span><span>Detail / Rule</span><span style="text-align:right">Time</span>
+    </div>
+    <div id="log"><div class="empty-log">No requests yet — hit a button above!</div></div>
+  </div>
+
+  <footer>
+    <span style="letter-spacing:1px">RATE LIMITER · WAF DASHBOARD</span>
+    <div class="footer-stats">
+      <span class="footer-stat">Total: <b id="ftTotal">0</b></span>
+      <span class="footer-stat">Block rate: <b id="ftBlockRate">0%</b></span>
+      <span class="footer-stat">WAF rate: <b id="ftWafRate">0%</b></span>
+    </div>
+  </footer>
+
+</div>
+<script>
+  // ── State ──────────────────────────────────────────────────────
+  let counts       = { ok: 0, lim: 0, bot: 0, waf: 0 };
+  let logEmpty     = true;
+  let activeFilter = 'ALL';
+  let allEntries   = [];
+  let ruleCounts   = {};
+  let lastBotScore = 0;
+  const sparkData  = { ok: [], lim: [], bot: [], waf: [] };
+  const SPARK_LEN  = 20;
+
+  // ── Session timer ──────────────────────────────────────────────
+  const startTime = Date.now();
+  setInterval(() => {
+    const s = Math.floor((Date.now() - startTime) / 1000);
+    const m = Math.floor(s / 60), sec = s % 60;
+    document.getElementById('uptimeVal').textContent =
+      String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+  }, 1000);
+
+  // ── WebSocket ──────────────────────────────────────────────────
+  const ws = new WebSocket(`ws://${location.host}`);
+  ws.onopen  = () => { document.getElementById('dot').classList.add('on'); document.getElementById('wsLabel').textContent = 'LIVE'; };
+  ws.onclose = () => { document.getElementById('dot').classList.remove('on'); document.getElementById('wsLabel').textContent = 'OFFLINE'; };
+
+  ws.onmessage = ({ data }) => {
+    const e = JSON.parse(data);
+    e._time = new Date().toLocaleTimeString();
+    if (e.type === 'INFO') return;
+    if (e.type === 'OK')      { bump('cntOk',  ++counts.ok);  pushSpark('ok'); }
+    if (e.type === 'LIMITED') { bump('cntLim', ++counts.lim); pushSpark('lim'); }
+    if (e.type === 'BOT')     { bump('cntBot', ++counts.bot); pushSpark('bot'); updateBotPanel(e); }
+    if (e.type === 'WAF')     { bump('cntWaf', ++counts.waf); pushSpark('waf'); updateWafRules(e.rule); }
+    if (e.tokens !== undefined) updateBucket(e.tokens);
+    updateTrafficBar();
+    updateFooter();
+    addLog(e);
+  };
+
+  // ── Bump ──────────────────────────────────────────────────────
+  function bump(id, val) {
+    const el = document.getElementById(id);
+    el.textContent = val;
+    el.classList.add('bump');
+    setTimeout(() => el.classList.remove('bump'), 150);
+  }
+
+  // ── Bucket ────────────────────────────────────────────────────
+  function updateBucket(tokens) {
+    const pct = Math.round((tokens / 10) * 100);
+    document.getElementById('fill').style.height         = pct + '%';
+    document.getElementById('tokenNum').textContent      = tokens;
+    document.getElementById('tokenAvail').textContent    = tokens;
+    document.getElementById('progressFill').style.width  = pct + '%';
+    document.getElementById('pctLabel').textContent      = pct + '%';
+  }
+
+  // ── Traffic bar ───────────────────────────────────────────────
+  function updateTrafficBar() {
+    const total = counts.ok + counts.lim + counts.bot + counts.waf || 1;
+    document.getElementById('segOk').style.width  = (counts.ok  / total * 100) + '%';
+    document.getElementById('segLim').style.width = (counts.lim / total * 100) + '%';
+    document.getElementById('segBot').style.width = (counts.bot / total * 100) + '%';
+    document.getElementById('segWaf').style.width = (counts.waf / total * 100) + '%';
+  }
+
+  // ── Footer ────────────────────────────────────────────────────
+  function updateFooter() {
+    const total   = counts.ok + counts.lim + counts.bot + counts.waf;
+    const blocked = counts.lim + counts.bot + counts.waf;
+    document.getElementById('ftTotal').textContent     = total;
+    document.getElementById('ftBlockRate').textContent = total ? Math.round(blocked / total * 100) + '%' : '0%';
+    document.getElementById('ftWafRate').textContent   = total ? Math.round(counts.waf / total * 100) + '%' : '0%';
+  }
+
+  // ── WAF rule breakdown ────────────────────────────────────────
+  function updateWafRules(rule) {
+    if (!rule) return;
+    ruleCounts[rule] = (ruleCounts[rule] || 0) + 1;
+    const maxCount   = Math.max(...Object.values(ruleCounts));
+    document.getElementById('ruleList').innerHTML = Object.entries(ruleCounts)
+      .sort((a,b) => b[1] - a[1])
+      .map(([r, c]) => `
+        <div class="rule-item">
+          <span class="rule-name">${r.replace(/_/g,' ')}</span>
+          <div class="rule-bar-wrap"><div class="rule-bar" style="width:${Math.round(c/maxCount*100)}%"></div></div>
+          <span class="rule-count">${c}</span>
+        </div>`)
+      .join('');
+  }
+
+  // ── Bot threat panel ──────────────────────────────────────────
+  function updateBotPanel(e) {
+    const score = e.score || 0;
+    lastBotScore = Math.max(lastBotScore, score);
+    document.getElementById('ringFill').style.strokeDashoffset = 188 - (188 * Math.min(lastBotScore,100) / 100);
+    document.getElementById('ringNum').textContent = lastBotScore;
+
+    const reasons  = e.reasons || [];
+    const hasUA    = !reasons.some(r => r.includes('User-Agent'));
+    const hasTool  = !reasons.some(r => r.includes('tool'));
+    const hasSpeed = !reasons.some(r => r.includes('fast'));
+    setCheck('dotUA',    'valUA',    hasUA,    hasUA    ? 'OK' : '+40');
+    setCheck('dotTool',  'valTool',  hasTool,  hasTool  ? 'OK' : '+60');
+    setCheck('dotSpeed', 'valSpeed', hasSpeed, hasSpeed ? 'OK' : '+20');
+
+    const tv = document.getElementById('threatVal');
+    if (lastBotScore >= 60)      { tv.textContent = 'HIGH';   tv.className = 'threat-val threat-high'; }
+    else if (lastBotScore >= 30) { tv.textContent = 'MEDIUM'; tv.className = 'threat-val threat-medium'; }
+    else                         { tv.textContent = 'LOW';    tv.className = 'threat-val threat-low'; }
+  }
+
+  function setCheck(dotId, valId, pass, label) {
+    document.getElementById(dotId).className = 'check-dot ' + (pass ? 'pass' : 'warn');
+    const el = document.getElementById(valId);
+    el.textContent = label;
+    el.style.color = pass ? 'var(--green)' : 'var(--yellow)';
+  }
+
+  // ── Sparklines ────────────────────────────────────────────────
+  const sparkColors = { ok:'#00ff88', lim:'#ff3b5c', bot:'#ffb800', waf:'#b060ff' };
+
+  function pushSpark(key) {
+    const d    = sparkData[key];
+    const last = d.length ? d[d.length-1] : 0;
+    d.push(last + 1);
+    if (d.length > SPARK_LEN) d.shift();
+    const cId = 'spark' + key.charAt(0).toUpperCase() + key.slice(1);
+    drawSpark(cId, d, sparkColors[key]);
+  }
+
+  function drawSpark(canvasId, data, color) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (data.length < 2) return;
+    const max = Math.max(...data) || 1;
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 1.5;
+    data.forEach((v, i) => {
+      const x = (i / (data.length - 1)) * canvas.width;
+      const y = canvas.height - (v / max) * (canvas.height * 0.85) - 2;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  // ── Log ───────────────────────────────────────────────────────
+  function addLog(e) {
+    allEntries.unshift(e);
+    if (allEntries.length > 200) allEntries.pop();
+    renderLog();
+  }
+
+  function renderLog() {
+    const log      = document.getElementById('log');
+    const filtered = activeFilter === 'ALL' ? allEntries : allEntries.filter(e => e.type === activeFilter);
+
+    if (filtered.length === 0) {
+      log.innerHTML = `<div class="empty-log">${allEntries.length === 0 ? 'No requests yet — hit a button above!' : 'No entries for this filter.'}</div>`;
+      return;
+    }
+
+    const map = { OK:['badge-ok','ALLOWED'], LIMITED:['badge-lim','LIMITED'], BOT:['badge-bot','BOT'], WAF:['badge-waf','WAF'] };
+    log.innerHTML = filtered.slice(0, 100).map(e => {
+      const [cls, label] = map[e.type] || ['badge-ok', e.type];
+      const detail = e.rule || (e.reasons && e.reasons[0]) || '';
+      return `<div class="entry">
+        <span class="entry-badge ${cls}">${label}</span>
+        <span class="entry-path">${e.path || '/api/hello'}</span>
+        <span class="entry-ip">${e.ip || '—'}</span>
+        <span class="entry-detail">${detail}</span>
+        <span class="entry-time">${e._time || '—'}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function setFilter(f) {
+    activeFilter = f;
+    document.querySelectorAll('.log-filter').forEach(b => b.classList.remove('active'));
+    document.getElementById('f' + f).classList.add('active');
+    renderLog();
+  }
+
+  function clearLog() {
+    allEntries = [];
+    renderLog();
+  }
+
+  // ── Send requests (unchanged logic) ───────────────────────────
+  async function sendRequests(count) {
+    const el = document.getElementById('result');
+    el.style.color = 'var(--muted2)';
+    el.textContent = 'Sending...';
+    let last = '';
+    for (let i = 0; i < count; i++) {
+      const res = await fetch('/api/hello');
+      const d   = await res.json();
+      last = `${res.status} — ${d.message || d.error}`;
+      el.style.color = res.ok ? 'var(--green)' : 'var(--red)';
+      if (count > 1) await new Promise(r => setTimeout(r, 55));
+    }
+    el.textContent = last;
+  }
+</script>
+</body>
+</html>
