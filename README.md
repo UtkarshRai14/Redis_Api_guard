@@ -190,7 +190,7 @@ cp .env.example .env
 | ------------- | ------------------------ | ----------- |
 | `REDIS_URL`   | `redis://localhost:6379` | Redis connection string |
 | `PORT`        | `3000`                   | HTTP port for the API and dashboard |
-| `TRUST_PROXY` | `false`                  | Set when running behind a reverse proxy so client IPs are read from `X-Forwarded-For`: a hop count (`1`), `loopback`, or a comma-separated list of proxy IPs. Avoid `true`, which lets clients fake their IP. |
+| `TRUST_PROXY` | `false`                  | Set when running behind a reverse proxy so client IPs are read from `X-Forwarded-For`: a hop count (`1`), `loopback`, `uniquelocal` (all private-network proxies, used on Render), or a comma-separated list of proxy IPs. Avoid `true`, which lets clients fake their IP. |
 
 ## Running the Server
 

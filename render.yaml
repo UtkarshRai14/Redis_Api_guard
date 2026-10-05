@@ -16,9 +16,10 @@ services:
           type: keyvalue
           name: redis-api-guard-kv
           property: connectionString
-      # Render's proxy sits in front of the app; trust one hop so req.ip is the real client
+      # Render forwards requests through a varying number of internal proxies (10.x addresses).
+      # Trusting private-network proxies makes req.ip the first public address: the real client.
       - key: TRUST_PROXY
-        value: "1"
+        value: uniquelocal
 
   - type: keyvalue
     name: redis-api-guard-kv

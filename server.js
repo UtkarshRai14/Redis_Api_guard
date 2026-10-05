@@ -20,7 +20,7 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 // working out req.ip. The rate limiter and bot detector key everything on req.ip.
 //   not set / "false" → never trust it (safe default: use the socket address)
 //   "1", "2", ...     → trust that many reverse proxies in front of this app
-//   "loopback" or a comma-separated list of proxy IPs → trust those addresses
+//   "loopback", "uniquelocal" or a comma-separated list of proxy IPs → trust those addresses
 // "true" trusts every hop, so a client can fake its IP. Avoid it.
 function parseTrustProxy(value) {
   if (!value || value === 'false') return false;
