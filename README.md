@@ -212,6 +212,15 @@ Open the monitoring dashboard:
 http://localhost:3000/dashboard.html
 ```
 
+## Deploying to Render
+
+The repository includes a `render.yaml` Blueprint that creates the web service and a Render Key Value (Redis) instance in the same region and connects them.
+
+1. In the Render Dashboard, click **New → Blueprint**.
+2. Select this repository and click **Apply**.
+
+Both services use Render's free plan: the web service spins down after 15 minutes without traffic (the next request takes about a minute to wake it), and the free Key Value instance keeps data in memory only, so rate-limit state resets if it restarts.
+
 ## Testing Rate Limiting
 
 The repository includes `script.js`, which sends 50 requests per second for 10 seconds to the protected API endpoint and prints how many requests got each response status.

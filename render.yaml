@@ -1,0 +1,27 @@
+# Render Blueprint: the API server plus the Redis (Key Value) instance it uses.
+# Both are in the same region so the server reaches Redis over Render's private network.
+
+services:
+  - type: web
+    name: redis-api-guard
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: redis-api-guard-kv
+          property: connectionString
+      # Render's proxy sits in front of the app; trust one hop so req.ip is the real client
+      - key: TRUST_PROXY
+        value: "1"
+
+  - type: keyvalue
+    name: redis-api-guard-kv
+    plan: free
+    region: singapore
+    ipAllowList: [] # private network only
