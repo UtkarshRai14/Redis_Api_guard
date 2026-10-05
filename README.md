@@ -66,7 +66,8 @@ WebSocket Dashboard
 ├── package.json
 ├── package-lock.json
 ├── .env.example
-└── .gitignore
+├── .gitignore
+└── README.md
 ```
 
 ## Request Protection Flow
@@ -115,6 +116,10 @@ When no token is available, the API returns:
 429 Too Many Requests
 ```
 
+The response includes a `Retry-After` header. Allowed responses include an `X-Tokens-Remaining` header.
+
+If Redis is unavailable, bot detection and rate limiting cannot run, so `/api` requests receive `503 Service Unavailable` instead of being let through or reported as rate-limited.
+
 ## API Endpoints
 
 ### Health Check
@@ -123,7 +128,7 @@ When no token is available, the API returns:
 GET /health
 ```
 
-Returns the server health status and is intentionally outside the rate-limited `/api` middleware.
+Returns `200` when Redis is ready and `503` when it is not. It is intentionally outside the rate-limited `/api` middleware.
 
 ### Hello
 
@@ -175,17 +180,17 @@ cd Redis_Api_guard
 npm install
 ```
 
-Create an environment file:
+Create an environment file from the example:
 
-```text
-.env
+```bash
+cp .env.example .env
 ```
 
-Add your Redis connection string:
-
-```env
-REDIS_URL=redis://localhost:6379
-```
+| Variable      | Default                  | Description |
+| ------------- | ------------------------ | ----------- |
+| `REDIS_URL`   | `redis://localhost:6379` | Redis connection string |
+| `PORT`        | `3000`                   | HTTP port for the API and dashboard |
+| `TRUST_PROXY` | `false`                  | Set when running behind a reverse proxy so client IPs are read from `X-Forwarded-For`: a hop count (`1`), `loopback`, or a comma-separated list of proxy IPs. Avoid `true`, which lets clients fake their IP. |
 
 ## Running the Server
 
@@ -209,12 +214,12 @@ http://localhost:3000/dashboard.html
 
 ## Testing Rate Limiting
 
-The repository includes `script.js`, which repeatedly sends requests to the protected API endpoint to demonstrate the rate limiter.
+The repository includes `script.js`, which sends 50 requests per second for 10 seconds to the protected API endpoint and prints how many requests got each response status.
 
-Run it separately after starting the server:
+Run it separately after starting the server (the URL is optional and defaults to `http://localhost:3000/api/hello`):
 
 ```bash
-node script.js
+node script.js [url]
 ```
 
 The dashboard can then be used to observe allowed and rate-limited requests in real time.
