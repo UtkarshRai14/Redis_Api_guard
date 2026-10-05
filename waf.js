@@ -25,7 +25,7 @@
 
 const SQL_PATTERNS = [
   /(\b(select|insert|update|delete|drop|truncate|alter|exec|union)\b.*\b(from|where|table)\b)/i,
-  /(--|;|\/\*|\*\/|xp_|sp_)/,
+  /(--|;|\/\*|\*\/|\bxp_|\bsp_)/,
   /\b(or|and)\b\s*['"]?\d+['"]?\s*=\s*['"]?\d+['"]?/i,
   /\bsleep\s*\(\s*\d+\s*\)/i,
   /\bbenchmark\s*\(/i,
@@ -36,14 +36,15 @@ const SQL_PATTERNS = [
 const XSS_PATTERNS = [
   /<\s*script[\s\S]*?>/i,
   /<\/\s*script\s*>/i,
-  /on\w+\s*=\s*["']?[^"'>]*/i,
+  /\bon\w+\s*=\s*["']?[^"'>]*/i,
   /javascript\s*:/i,
   /(%3c|%3e).*(%3c|%3e)/i,
   /<(iframe|object|embed|svg|img)[^>]*/i,
 ];
 
 const CMD_PATTERNS = [
-  /[;&|`](\s*(ls|cat|id|whoami|uname|wget|curl|bash|sh|nc|python|perl|php)\b)/i,
+  // (?!\s*=) skips "&id=5" in a query string or "; id=7" in a Cookie header
+  /[;&|`](\s*(ls|cat|id|whoami|uname|wget|curl|bash|sh|nc|python|perl|php)\b)(?!\s*=)/i,
   /\$\{.*?\}/,
   /\{\{.*?\}\}/,
   /(\/etc\/passwd|\/etc\/shadow|\/proc\/self|cmd\.exe|\/bin\/sh)/i,
@@ -51,7 +52,7 @@ const CMD_PATTERNS = [
 
 const TRAVERSAL_PATTERNS = [
   /\.\.[\/\\]/,
-  /%2e%2e[%2f%5c]/i,
+  /%2e%2e(%2f|%5c)/i,
   /\.\.%2f/i,
   /%252e%252e/i,
   /(\/etc\/|\/var\/|\/proc\/|\/sys\/|\/root\/)/i,
