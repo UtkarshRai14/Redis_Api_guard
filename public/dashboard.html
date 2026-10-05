@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Rate Limiter — Dashboard</title>
+  <title>Redis API Guard — Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
   <style>
     :root {
@@ -17,6 +17,7 @@
       --red:     #ff3b5c;
       --yellow:  #ffb800;
       --purple:  #b060ff;
+      --orange:  #ff7a3d;
       --text:    #e2eaf4;
       --muted:   #3d5570;
       --muted2:  #5a7498;
@@ -277,7 +278,6 @@
     .threat-label { color: var(--muted2); letter-spacing: 1px; text-transform: uppercase; }
     .threat-val { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.85rem; }
     .threat-low    { color: var(--green); }
-    .threat-medium { color: var(--yellow); }
     .threat-high   { color: var(--red); }
 
     /* ── Log ── */
@@ -323,6 +323,7 @@
     .badge-lim { background: rgba(255,59,92,0.08);   color: var(--red);    border: 1px solid rgba(255,59,92,0.18); }
     .badge-bot { background: rgba(255,184,0,0.08);   color: var(--yellow); border: 1px solid rgba(255,184,0,0.18); }
     .badge-waf { background: rgba(176,96,255,0.08);  color: var(--purple); border: 1px solid rgba(176,96,255,0.18); }
+    .badge-err { background: rgba(255,122,61,0.08);  color: var(--orange); border: 1px solid rgba(255,122,61,0.18); }
     .entry-path   { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .entry-ip     { color: var(--muted2); font-size: 0.66rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .entry-detail { color: var(--muted2); font-size: 0.64rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -360,7 +361,7 @@
     <div class="logo">
       <div class="logo-icon">🛡️</div>
       <div class="logo-text">
-        <h1>Rate Limiter</h1>
+        <h1>Redis API Guard</h1>
         <div class="logo-sub">
           <span class="logo-tag">Token Bucket</span>
           <span class="logo-tag">Bot Detection</span>
@@ -390,7 +391,7 @@
     </div>
     <div class="card c-red">
       <div class="card-inner">
-        <div class="card-top"><span class="card-icon">🚫</span><span class="card-badge">Blocked</span></div>
+        <div class="card-top"><span class="card-icon">🚫</span><span class="card-badge">Limited</span></div>
         <div class="card-num" id="cntLim">0</div>
         <div class="card-label">Rate limited</div>
       </div>
@@ -400,7 +401,7 @@
       <div class="card-inner">
         <div class="card-top"><span class="card-icon">🤖</span><span class="card-badge">Bots</span></div>
         <div class="card-num" id="cntBot">0</div>
-        <div class="card-label">Bot requests</div>
+        <div class="card-label">Bots blocked</div>
       </div>
       <canvas class="card-spark" id="sparkBot" width="80" height="36"></canvas>
     </div>
@@ -418,10 +419,10 @@
   <div class="traffic-bar">
     <span class="traffic-label">Traffic split</span>
     <div class="traffic-segments">
-      <div class="traffic-seg seg-ok"  id="segOk"  style="width:25%"></div>
-      <div class="traffic-seg seg-lim" id="segLim" style="width:25%"></div>
-      <div class="traffic-seg seg-bot" id="segBot" style="width:25%"></div>
-      <div class="traffic-seg seg-waf" id="segWaf" style="width:25%"></div>
+      <div class="traffic-seg seg-ok"  id="segOk" style="width:0%"></div>
+      <div class="traffic-seg seg-lim" id="segLim" style="width:0%"></div>
+      <div class="traffic-seg seg-bot" id="segBot" style="width:0%"></div>
+      <div class="traffic-seg seg-waf" id="segWaf" style="width:0%"></div>
     </div>
     <div class="traffic-legend">
       <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Allowed</div>
@@ -439,34 +440,34 @@
         <div>
           <div class="bucket-top"></div>
           <div class="bucket-body">
-            <div class="bucket-fill" id="fill" style="height:100%"></div>
-            <div class="token-num" id="tokenNum">10</div>
+            <div class="bucket-fill" id="fill" style="height:0%"></div>
+            <div class="token-num" id="tokenNum">—</div>
           </div>
         </div>
         <div class="bucket-stats">
-          <div class="stat-row"><span class="stat-key">Capacity</span><span class="stat-val">10 tokens</span></div>
-          <div class="stat-row"><span class="stat-key">Refill rate</span><span class="stat-val">0.2 / sec</span></div>
+          <div class="stat-row"><span class="stat-key">Capacity</span><span class="stat-val" id="capacityVal">—</span></div>
+          <div class="stat-row"><span class="stat-key">Refill rate</span><span class="stat-val" id="refillVal">—</span></div>
           <div class="stat-row"><span class="stat-key">Algorithm</span><span class="stat-val">Token Bucket</span></div>
-          <div class="stat-row"><span class="stat-key">Available</span><span class="stat-val" id="tokenAvail">10</span></div>
+          <div class="stat-row"><span class="stat-key">Available</span><span class="stat-val" id="tokenAvail">—</span></div>
           <div class="progress-bar-wrap">
-            <div class="progress-label"><span>Fill level</span><span id="pctLabel">100%</span></div>
-            <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:100%"></div></div>
+            <div class="progress-label"><span>Fill level</span><span id="pctLabel">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="panel">
-      <div class="panel-title">Test the Limiter</div>
+      <div class="panel-title">Send Test Requests</div>
       <div class="test-btns">
         <button class="btn" onclick="sendRequests(1)">
           <span>Send 1 Request</span><span class="btn-badge">single</span>
         </button>
         <button class="btn" onclick="sendRequests(5)">
-          <span>Burst × 5</span><span class="btn-badge">burst</span>
+          <span>Send 5 Requests</span><span class="btn-badge">one after another</span>
         </button>
         <button class="btn btn-flood" onclick="sendRequests(15)">
-          <span>Flood × 15</span><span class="btn-badge">🚨 flood</span>
+          <span>Send 15 Requests</span><span class="btn-badge">🚨 one after another</span>
         </button>
       </div>
       <div id="result">← Click a button to test</div>
@@ -535,7 +536,9 @@
         <button class="log-filter"        id="fLIMITED" onclick="setFilter('LIMITED')">Limited</button>
         <button class="log-filter"        id="fBOT"     onclick="setFilter('BOT')">Bot</button>
         <button class="log-filter"        id="fWAF"     onclick="setFilter('WAF')">WAF</button>
-        <button class="log-clear"         onclick="clearLog()">Clear</button>
+        <button class="log-filter"        id="fREDIS_ERROR" onclick="setFilter('REDIS_ERROR')">Redis Error</button>
+        <button class="log-clear"         onclick="clearDashboard()"
+                title="Resets the counters, charts and log shown on this page. Redis is not touched.">Clear dashboard</button>
       </div>
     </div>
     <div class="log-cols">
@@ -545,25 +548,43 @@
   </div>
 
   <footer>
-    <span style="letter-spacing:1px">RATE LIMITER · WAF DASHBOARD</span>
+    <span style="letter-spacing:1px">REDIS API GUARD · DASHBOARD</span>
     <div class="footer-stats">
       <span class="footer-stat">Total: <b id="ftTotal">0</b></span>
       <span class="footer-stat">Block rate: <b id="ftBlockRate">0%</b></span>
       <span class="footer-stat">WAF rate: <b id="ftWafRate">0%</b></span>
+      <span class="footer-stat">Redis errors: <b id="ftRedisErr">0</b></span>
     </div>
   </footer>
 
 </div>
 <script>
   // ── State ──────────────────────────────────────────────────────
-  let counts       = { ok: 0, lim: 0, bot: 0, waf: 0 };
-  let logEmpty     = true;
-  let activeFilter = 'ALL';
-  let allEntries   = [];
-  let ruleCounts   = {};
-  let lastBotScore = 0;
-  const sparkData  = { ok: [], lim: [], bot: [], waf: [] };
-  const SPARK_LEN  = 20;
+  // Everything here lives in this browser tab only. It is separate from the
+  // token bucket / bot counters kept in Redis, and "Clear dashboard" only resets this.
+  let counts          = { ok: 0, lim: 0, bot: 0, waf: 0 };
+  let redisErrors     = 0;
+  let activeFilter    = 'ALL';
+  let allEntries      = [];
+  let ruleCounts      = {};
+  let highestBotScore = 0;
+  let bucketCapacity  = null;   // sent by the server, not assumed here
+  const sparkData     = { ok: [], lim: [], bot: [], waf: [] };
+  const SPARK_LEN     = 20;
+
+  // ── Small helpers ──────────────────────────────────────────────
+  // Request data (path, ip, rule names...) is only ever put on the page with
+  // textContent, never as HTML, so it cannot inject markup or scripts.
+  function makeEl(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function formatTime(timestamp) {
+    return timestamp ? new Date(timestamp).toLocaleTimeString() : '—';
+  }
 
   // ── Session timer ──────────────────────────────────────────────
   const startTime = Date.now();
@@ -575,19 +596,34 @@
   }, 1000);
 
   // ── WebSocket ──────────────────────────────────────────────────
-  const ws = new WebSocket(`ws://${location.host}`);
+  // ws:// for a normal http page, wss:// when the page is served over https
+  const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${wsProtocol}//${location.host}`);
   ws.onopen  = () => { document.getElementById('dot').classList.add('on'); document.getElementById('wsLabel').textContent = 'LIVE'; };
   ws.onclose = () => { document.getElementById('dot').classList.remove('on'); document.getElementById('wsLabel').textContent = 'OFFLINE'; };
 
+  // Event types from the server: INFO, OK, LIMITED, BOT, WAF, REDIS_ERROR
   ws.onmessage = ({ data }) => {
     const e = JSON.parse(data);
-    e._time = new Date().toLocaleTimeString();
-    if (e.type === 'INFO') return;
-    if (e.type === 'OK')      { bump('cntOk',  ++counts.ok);  pushSpark('ok'); }
-    if (e.type === 'LIMITED') { bump('cntLim', ++counts.lim); pushSpark('lim'); }
-    if (e.type === 'BOT')     { bump('cntBot', ++counts.bot); pushSpark('bot'); updateBotPanel(e); }
-    if (e.type === 'WAF')     { bump('cntWaf', ++counts.waf); pushSpark('waf'); updateWafRules(e.rule); }
-    if (e.tokens !== undefined) updateBucket(e.tokens);
+
+    if (e.type === 'INFO') {
+      bucketCapacity = e.capacity;
+      document.getElementById('refillVal').textContent = `${e.refillRate} / sec`;
+      updateBucket(bucketCapacity, bucketCapacity);   // a new client starts with a full bucket
+      return;
+    }
+
+    if (e.type === 'OK')          { bump('cntOk',  ++counts.ok);  pushSpark('ok'); }
+    if (e.type === 'LIMITED')     { bump('cntLim', ++counts.lim); pushSpark('lim'); }
+    if (e.type === 'BOT')         { bump('cntBot', ++counts.bot); pushSpark('bot'); updateBotPanel(e); }
+    if (e.type === 'WAF')         { bump('cntWaf', ++counts.waf); pushSpark('waf'); updateWafRules(e.rule); }
+    if (e.type === 'REDIS_ERROR') { redisErrors++; }
+
+    if (e.type === 'OK' || e.type === 'LIMITED') {
+      bucketCapacity = e.capacity;
+      updateBucket(e.tokens, e.capacity);
+    }
+
     updateTrafficBar();
     updateFooter();
     addLog(e);
@@ -602,11 +638,13 @@
   }
 
   // ── Bucket ────────────────────────────────────────────────────
-  function updateBucket(tokens) {
-    const pct = Math.round((tokens / 10) * 100);
+  function updateBucket(tokens, capacity) {
+    const known = typeof capacity === 'number' && capacity > 0 && typeof tokens === 'number';
+    const pct   = known ? Math.round((tokens / capacity) * 100) : 0;
     document.getElementById('fill').style.height         = pct + '%';
-    document.getElementById('tokenNum').textContent      = tokens;
-    document.getElementById('tokenAvail').textContent    = tokens;
+    document.getElementById('tokenNum').textContent      = known ? tokens : '—';
+    document.getElementById('tokenAvail').textContent    = known ? tokens : '—';
+    document.getElementById('capacityVal').textContent   = known ? `${capacity} tokens` : '—';
     document.getElementById('progressFill').style.width  = pct + '%';
     document.getElementById('pctLabel').textContent      = pct + '%';
   }
@@ -621,68 +659,108 @@
   }
 
   // ── Footer ────────────────────────────────────────────────────
+  // Redis errors are not counted in Total / rates: they are an outage,
+  // not a decision made about a request.
   function updateFooter() {
     const total   = counts.ok + counts.lim + counts.bot + counts.waf;
     const blocked = counts.lim + counts.bot + counts.waf;
     document.getElementById('ftTotal').textContent     = total;
     document.getElementById('ftBlockRate').textContent = total ? Math.round(blocked / total * 100) + '%' : '0%';
     document.getElementById('ftWafRate').textContent   = total ? Math.round(counts.waf / total * 100) + '%' : '0%';
+    document.getElementById('ftRedisErr').textContent  = redisErrors;
   }
 
   // ── WAF rule breakdown ────────────────────────────────────────
   function updateWafRules(rule) {
     if (!rule) return;
     ruleCounts[rule] = (ruleCounts[rule] || 0) + 1;
-    const maxCount   = Math.max(...Object.values(ruleCounts));
-    document.getElementById('ruleList').innerHTML = Object.entries(ruleCounts)
-      .sort((a,b) => b[1] - a[1])
-      .map(([r, c]) => `
-        <div class="rule-item">
-          <span class="rule-name">${r.replace(/_/g,' ')}</span>
-          <div class="rule-bar-wrap"><div class="rule-bar" style="width:${Math.round(c/maxCount*100)}%"></div></div>
-          <span class="rule-count">${c}</span>
-        </div>`)
-      .join('');
+    renderWafRules();
+  }
+
+  function renderWafRules() {
+    const list    = document.getElementById('ruleList');
+    const entries = Object.entries(ruleCounts).sort((a, b) => b[1] - a[1]);
+
+    if (entries.length === 0) {
+      const item  = makeEl('div', 'rule-item');
+      const label = makeEl('span', 'rule-name', 'No WAF blocks yet');
+      label.style.color    = 'var(--muted)';
+      label.style.fontSize = '0.68rem';
+      item.appendChild(label);
+      list.replaceChildren(item);
+      return;
+    }
+
+    const maxCount = entries[0][1];
+    list.replaceChildren(...entries.map(([rule, count]) => {
+      const item = makeEl('div', 'rule-item');
+      const bar  = makeEl('div', 'rule-bar');
+      bar.style.width = Math.round(count / maxCount * 100) + '%';
+      const barWrap = makeEl('div', 'rule-bar-wrap');
+      barWrap.appendChild(bar);
+
+      item.append(
+        makeEl('span', 'rule-name', rule.replace(/_/g, ' ')),
+        barWrap,
+        makeEl('span', 'rule-count', count)
+      );
+      return item;
+    }));
   }
 
   // ── Bot threat panel ──────────────────────────────────────────
+  // Only blocked bots reach this panel. The server sends which checks fired
+  // as booleans in e.signals, so nothing here depends on the wording of e.reasons.
   function updateBotPanel(e) {
-    const score = e.score || 0;
-    lastBotScore = Math.max(lastBotScore, score);
-    document.getElementById('ringFill').style.strokeDashoffset = 188 - (188 * Math.min(lastBotScore,100) / 100);
-    document.getElementById('ringNum').textContent = lastBotScore;
+    highestBotScore = Math.max(highestBotScore, e.score || 0);
+    showBotScore();
 
-    const reasons  = e.reasons || [];
-    const hasUA    = !reasons.some(r => r.includes('User-Agent'));
-    const hasTool  = !reasons.some(r => r.includes('tool'));
-    const hasSpeed = !reasons.some(r => r.includes('fast'));
-    setCheck('dotUA',    'valUA',    hasUA,    hasUA    ? 'OK' : '+40');
-    setCheck('dotTool',  'valTool',  hasTool,  hasTool  ? 'OK' : '+60');
-    setCheck('dotSpeed', 'valSpeed', hasSpeed, hasSpeed ? 'OK' : '+20');
-
-    const tv = document.getElementById('threatVal');
-    if (lastBotScore >= 60)      { tv.textContent = 'HIGH';   tv.className = 'threat-val threat-high'; }
-    else if (lastBotScore >= 30) { tv.textContent = 'MEDIUM'; tv.className = 'threat-val threat-medium'; }
-    else                         { tv.textContent = 'LOW';    tv.className = 'threat-val threat-low'; }
+    const signals = e.signals || {};
+    setCheck('dotUA',    'valUA',    !signals.missingUserAgent);
+    setCheck('dotTool',  'valTool',  !signals.knownTool);
+    setCheck('dotSpeed', 'valSpeed', !signals.tooFast);
   }
 
-  function setCheck(dotId, valId, pass, label) {
+  function showBotScore() {
+    document.getElementById('ringFill').style.strokeDashoffset = 188 - (188 * Math.min(highestBotScore, 100) / 100);
+    document.getElementById('ringNum').textContent = highestBotScore;
+
+    const tv = document.getElementById('threatVal');
+    if (highestBotScore > 0) { tv.textContent = 'HIGH'; tv.className = 'threat-val threat-high'; }
+    else                     { tv.textContent = 'LOW';  tv.className = 'threat-val threat-low'; }
+  }
+
+  function setCheck(dotId, valId, pass) {
     document.getElementById(dotId).className = 'check-dot ' + (pass ? 'pass' : 'warn');
     const el = document.getElementById(valId);
-    el.textContent = label;
+    el.textContent = pass ? 'OK' : 'FLAGGED';
     el.style.color = pass ? 'var(--green)' : 'var(--yellow)';
+  }
+
+  function resetBotPanel() {
+    highestBotScore = 0;
+    showBotScore();
+    for (const [dotId, valId] of [['dotUA', 'valUA'], ['dotTool', 'valTool'], ['dotSpeed', 'valSpeed']]) {
+      document.getElementById(dotId).className = 'check-dot pass';
+      const el = document.getElementById(valId);
+      el.textContent = '—';
+      el.style.color = 'var(--muted2)';
+    }
   }
 
   // ── Sparklines ────────────────────────────────────────────────
   const sparkColors = { ok:'#00ff88', lim:'#ff3b5c', bot:'#ffb800', waf:'#b060ff' };
+
+  function sparkCanvasId(key) {
+    return 'spark' + key.charAt(0).toUpperCase() + key.slice(1);
+  }
 
   function pushSpark(key) {
     const d    = sparkData[key];
     const last = d.length ? d[d.length-1] : 0;
     d.push(last + 1);
     if (d.length > SPARK_LEN) d.shift();
-    const cId = 'spark' + key.charAt(0).toUpperCase() + key.slice(1);
-    drawSpark(cId, d, sparkColors[key]);
+    drawSpark(sparkCanvasId(key), d, sparkColors[key]);
   }
 
   function drawSpark(canvasId, data, color) {
@@ -710,27 +788,45 @@
     renderLog();
   }
 
+  // The short text shown in the "Detail / Rule" column
+  function eventDetail(e) {
+    if (e.type === 'WAF')         return e.rule || '';
+    if (e.type === 'BOT')         return (e.reasons || []).join(', ');
+    if (e.type === 'LIMITED')     return `retry in ${e.retryAfter}s`;
+    if (e.type === 'REDIS_ERROR') return 'Redis unavailable';
+    return '';
+  }
+
   function renderLog() {
     const log      = document.getElementById('log');
     const filtered = activeFilter === 'ALL' ? allEntries : allEntries.filter(e => e.type === activeFilter);
 
     if (filtered.length === 0) {
-      log.innerHTML = `<div class="empty-log">${allEntries.length === 0 ? 'No requests yet — hit a button above!' : 'No entries for this filter.'}</div>`;
+      const text = allEntries.length === 0 ? 'No requests yet — hit a button above!' : 'No entries for this filter.';
+      log.replaceChildren(makeEl('div', 'empty-log', text));
       return;
     }
 
-    const map = { OK:['badge-ok','ALLOWED'], LIMITED:['badge-lim','LIMITED'], BOT:['badge-bot','BOT'], WAF:['badge-waf','WAF'] };
-    log.innerHTML = filtered.slice(0, 100).map(e => {
+    const map = {
+      OK:          ['badge-ok',  'ALLOWED'],
+      LIMITED:     ['badge-lim', 'LIMITED'],
+      BOT:         ['badge-bot', 'BOT'],
+      WAF:         ['badge-waf', 'WAF'],
+      REDIS_ERROR: ['badge-err', 'REDIS ERROR'],
+    };
+
+    log.replaceChildren(...filtered.slice(0, 100).map(e => {
       const [cls, label] = map[e.type] || ['badge-ok', e.type];
-      const detail = e.rule || (e.reasons && e.reasons[0]) || '';
-      return `<div class="entry">
-        <span class="entry-badge ${cls}">${label}</span>
-        <span class="entry-path">${e.path || '/api/hello'}</span>
-        <span class="entry-ip">${e.ip || '—'}</span>
-        <span class="entry-detail">${detail}</span>
-        <span class="entry-time">${e._time || '—'}</span>
-      </div>`;
-    }).join('');
+      const row = makeEl('div', 'entry');
+      row.append(
+        makeEl('span', 'entry-badge ' + cls, label),
+        makeEl('span', 'entry-path',   e.path || '—'),
+        makeEl('span', 'entry-ip',     e.ip || '—'),
+        makeEl('span', 'entry-detail', eventDetail(e)),
+        makeEl('span', 'entry-time',   formatTime(e.timestamp))
+      );
+      return row;
+    }));
   }
 
   function setFilter(f) {
@@ -740,26 +836,57 @@
     renderLog();
   }
 
-  function clearLog() {
-    allEntries = [];
+  // ── Clear dashboard ───────────────────────────────────────────
+  // Resets everything shown on this page. It does not touch Redis, so the
+  // real token buckets and bot counters keep their state.
+  function clearDashboard() {
+    counts      = { ok: 0, lim: 0, bot: 0, waf: 0 };
+    redisErrors = 0;
+    ruleCounts  = {};
+    allEntries  = [];
+
+    for (const key of Object.keys(sparkData)) {
+      sparkData[key] = [];
+      drawSpark(sparkCanvasId(key), [], sparkColors[key]);
+    }
+
+    for (const id of ['cntOk', 'cntLim', 'cntBot', 'cntWaf']) {
+      document.getElementById(id).textContent = 0;
+    }
+
+    resetBotPanel();
+    renderWafRules();
+    updateBucket(bucketCapacity, bucketCapacity);   // back to a full bucket (or "—" before the server has said the capacity)
+    updateTrafficBar();
+    updateFooter();
     renderLog();
   }
 
-  // ── Send requests (unchanged logic) ───────────────────────────
+  // ── Send test requests ────────────────────────────────────────
+  // The requests are sent one after another (55 ms apart) from this browser tab.
+  // For a real flood, use script.js.
   async function sendRequests(count) {
     const el = document.getElementById('result');
     el.style.color = 'var(--muted2)';
     el.textContent = 'Sending...';
     let last = '';
-    for (let i = 0; i < count; i++) {
-      const res = await fetch('/api/hello');
-      const d   = await res.json();
-      last = `${res.status} — ${d.message || d.error}`;
-      el.style.color = res.ok ? 'var(--green)' : 'var(--red)';
-      if (count > 1) await new Promise(r => setTimeout(r, 55));
+    try {
+      for (let i = 0; i < count; i++) {
+        const res  = await fetch('/api/hello');
+        const body = await res.json().catch(() => ({}));
+        last = `${res.status} — ${body.message || body.error || res.statusText}`;
+        if (res.status === 429 && body.retryAfter) last += ` (retry in ${body.retryAfter}s)`;
+        el.style.color = res.ok ? 'var(--green)' : 'var(--red)';
+        if (count > 1) await new Promise(r => setTimeout(r, 55));
+      }
+      el.textContent = count > 1 ? `Sent ${count} requests. Last: ${last}` : last;
+    } catch (err) {
+      el.style.color = 'var(--red)';
+      el.textContent = 'Request failed — is the server running?';
     }
-    el.textContent = last;
   }
+
+  clearDashboard();   // start from the same state as after "Clear dashboard"
 </script>
 </body>
 </html>

@@ -7,11 +7,15 @@
 //
 //  Checks:
 //  1. HTTP Method       — only allow standard methods
-//  2. URL / Path        — path traversal, SQLi, XSS in URL & query string
+//  2. URL / Path        — path traversal, SQLi, XSS, command injection in the URL
+//                         (req.url includes the query string, so it is covered too)
 //  3. Request Headers   — oversized values, missing Host, SSRF headers, injection in values
-//  4. Request Body      — SQLi, XSS, command injection, path traversal in JSON body
+//  4. Request Body      — SQLi, XSS, command injection, path traversal in the string
+//                         values of a JSON body (other body types are not parsed or inspected)
 //  5. Content-Type      — POST/PUT/PATCH must declare a content type
-//  6. Payload Size      — body > 10 KB is rejected
+//  6. Payload Size      — parsed JSON body larger than 10 KB (UTF-8 bytes) is rejected
+//
+//  This is a small pattern-based WAF for learning, not a complete defence.
 //
 //  Returns: { blocked: true, rule: 'RULE_NAME', detail: '...' }
 //        or { blocked: false }
@@ -67,6 +71,12 @@ function matchesAny(str, patterns) {
   return patterns.some(p => p.test(str));
 }
 
+// Decode %XX escapes so encoded attacks are matched too.
+// Malformed escapes (e.g. "%zz") make decodeURIComponent throw, so use the raw text then.
+function safeDecode(str) {
+  try { return decodeURIComponent(str); } catch { return str; }
+}
+
 // ── Rule checkers ─────────────────────────────────────────────────
 
 function checkMethod(req) {
@@ -76,18 +86,13 @@ function checkMethod(req) {
 }
 
 function checkPath(req) {
-  const raw       = req.url || '';
-  const decoded   = (() => { try { return decodeURIComponent(raw); } catch { return raw; } })();
-  const qs        = raw.includes('?') ? raw.split('?')[1] : '';
-  const decodedQs = (() => { try { return decodeURIComponent(qs); } catch { return qs; } })();
+  // req.url is the path plus the query string, so this covers both
+  const decoded = safeDecode(req.url || '');
 
-  if (matchesAny(decoded,   TRAVERSAL_PATTERNS)) return { blocked: true, rule: 'PATH_TRAVERSAL',  detail: 'Path traversal attempt in URL' };
-  if (matchesAny(decoded,   SQL_PATTERNS))        return { blocked: true, rule: 'SQLI_IN_URL',     detail: 'SQL injection pattern in URL' };
-  if (matchesAny(decoded,   XSS_PATTERNS))        return { blocked: true, rule: 'XSS_IN_URL',      detail: 'XSS pattern in URL' };
-  if (matchesAny(decoded,   CMD_PATTERNS))        return { blocked: true, rule: 'CMD_IN_URL',      detail: 'Command injection in URL' };
-  if (matchesAny(decodedQs, SQL_PATTERNS))        return { blocked: true, rule: 'SQLI_IN_QUERY',   detail: 'SQL injection in query string' };
-  if (matchesAny(decodedQs, XSS_PATTERNS))        return { blocked: true, rule: 'XSS_IN_QUERY',    detail: 'XSS pattern in query string' };
-  if (matchesAny(decodedQs, CMD_PATTERNS))        return { blocked: true, rule: 'CMD_IN_QUERY',    detail: 'Command injection in query string' };
+  if (matchesAny(decoded, TRAVERSAL_PATTERNS)) return { blocked: true, rule: 'PATH_TRAVERSAL', detail: 'Path traversal attempt in URL' };
+  if (matchesAny(decoded, SQL_PATTERNS))       return { blocked: true, rule: 'SQLI_IN_URL',    detail: 'SQL injection pattern in URL' };
+  if (matchesAny(decoded, XSS_PATTERNS))       return { blocked: true, rule: 'XSS_IN_URL',     detail: 'XSS pattern in URL' };
+  if (matchesAny(decoded, CMD_PATTERNS))       return { blocked: true, rule: 'CMD_IN_URL',     detail: 'Command injection in URL' };
 
   return { blocked: false };
 }
@@ -100,6 +105,7 @@ function checkHeaders(req) {
 
   for (const [name, value] of Object.entries(h)) {
     if (typeof value === 'string') {
+      // Node decodes header values as latin1 (one byte per character), so .length is the byte size
       if (value.length > MAX_HEADER_BYTES)
         return { blocked: true, rule: 'OVERSIZED_HEADER', detail: `Header "${name}" exceeds ${MAX_HEADER_BYTES} bytes` };
       if (matchesAny(value, XSS_PATTERNS))
@@ -125,8 +131,9 @@ function checkBody(req) {
   if (!req.body || typeof req.body !== 'object' || Object.keys(req.body).length === 0)
     return { blocked: false };
 
+  // Buffer.byteLength counts UTF-8 bytes; string.length would count characters
   const serialised = JSON.stringify(req.body);
-  if (serialised.length > MAX_BODY_BYTES)
+  if (Buffer.byteLength(serialised, 'utf8') > MAX_BODY_BYTES)
     return { blocked: true, rule: 'OVERSIZED_BODY', detail: `Body exceeds ${MAX_BODY_BYTES / 1024} KB` };
 
   function* strings(obj, depth = 0) {
